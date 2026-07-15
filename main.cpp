@@ -2,8 +2,6 @@
 #include <iostream>
 using namespace std;
 
-uint64_t startingPawns = 0x000000000000FF00 & 0xff00ffffffffffff;
-
 enum PieceTypes
 {
     Pawn,
@@ -31,7 +29,7 @@ public:
     uint64_t blackPieces;
     uint64_t allPieces;
 
-    Color sideToMove;
+    Color sideToMove = White;
 
     int castlingRights;
     int enPassantSquare;
@@ -111,13 +109,17 @@ void knightLookup()
         // up 1 left 2
         attacks |= (knight << 6) & notFileG & notFileH;
         // down 2 right 1
-        attacks |= (knight >> 17) & notFileH;
+        if (square >= 17)
+            attacks |= (knight >> 17) & notFileH;
         // down 2 left 1
-        attacks |= (knight >> 15) & notFileA;
+        if (square >= 15)
+            attacks |= (knight >> 15) & notFileA;
         // down 1 right 2
-        attacks |= (knight >> 10) & notFileH & notFileG;
+        if (square >= 10)
+            attacks |= (knight >> 10) & notFileH & notFileG;
         // down 1 left 2
-        attacks |= (knight >> 6) & notFileA & notFileB;
+        if (square >= 6)
+            attacks |= (knight >> 6) & notFileA & notFileB;
 
         knightAttacks[square] = attacks;
     }
