@@ -430,6 +430,40 @@ void serializeBishopMoves(const Board &board, movesList &list)
     }
 }
 
+void serializeQueenMoves(const Board &board, movesList &list)
+{
+    const int queenDirections[8][2] = {
+        {1, 1},
+        {-1, 1},
+        {1, -1},
+        {-1, -1},
+        {1, 0},
+        {-1, 0},
+        {0, 1},
+        {0, -1}};
+
+    Color side = board.sideToMove;
+    uint64_t squares = board.pieces[side][Bishop];
+    uint64_t sidePieces = side == White ? board.whitePieces : board.blackPieces;
+
+    while (squares != 0)
+    {
+        int src = __builtin_ctzll(squares);
+        uint64_t validAttacks = slidingMoves(src, board, queenDirections, 8) & ~sidePieces;
+        while (validAttacks != 0)
+        {
+            int dest = __builtin_ctzll(validAttacks);
+
+            uint16_t move = src | dest << 6;
+            list.addMove(move);
+
+            validAttacks &= (validAttacks - 1);
+        }
+
+        squares &= (squares - 1);
+    }
+}
+
 void printBoard(const Board &board)
 {
     const char symbolsW[] = {'P', 'N', 'B', 'R', 'K', 'Q'};
@@ -484,6 +518,8 @@ movesList generateMoves(const Board &board)
     serializeKnightMoves(board, moves);
     serializeKingMoves(board, moves);
     serializeRookMoves(board, moves);
+    serializeBishopMoves(board, moves);
+    serializeQueenMoves(board, moves);
 
     return moves;
 }
