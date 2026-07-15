@@ -116,8 +116,19 @@ void serializePawnMoves(const Board& board, movesList& list){
         list.addMove(move);
 
         singlePushes &= (singlePushes-1);
-
     }
+
     uint64_t doublePushes = (singlePushes << 8) & emptySquares & rank4;
+    while (doublePushes != 0){
+        int dest = __builtin_ctzll(doublePushes);
+        int src = dest - 16;
+        
+        uint16_t flag = (1 << 14);
+        uint16_t move = src | (dest << 6) | flag;
+
+        list.addMove(move);
+
+        doublePushes &= (doublePushes-1);
+    }
 
 }
