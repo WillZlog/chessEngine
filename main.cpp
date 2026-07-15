@@ -125,6 +125,39 @@ void knightLookup()
     }
 }
 
+uint64_t kingAttacks[64];
+
+void kingLookup()
+{
+    uint64_t notFileA = 0xFEFEFEFEFEFEFEFEULL;
+    uint64_t notFileH = 0x7F7F7F7F7F7F7F7FULL;
+
+    for (int square = 0; square < 64; ++square)
+    {
+        uint64_t king = 1ULL << square;
+        uint64_t attacks = 0ULL;
+
+        // left
+        attacks |= (king >> 1) & notFileH;
+        // right
+        attacks |= (king << 1) & notFileA;
+        // up
+        attacks |= (king << 8);
+        // down
+        attacks |= (king >> 8);
+        // up-left
+        attacks |= (king << 7) & notFileA;
+        // up-right
+        attacks |= (king << 9) & notFileH;
+        // down-right
+        attacks |= (king >> 7) & notFileA;
+        // down-left
+        attacks |= (king >> 9) & notFileH;
+
+        kingAttacks[square] = attacks;
+    }
+}
+
 void serializePawnMoves(const Board &board, movesList &list)
 {
 
@@ -286,6 +319,25 @@ void serializeKnightMoves(const Board &board, movesList &list)
     }
 }
 
+void serializeKingMoves(const Board &board, movesList &list)
+{
+    Color play = board.sideToMove;
+    uint64_t piece = board.pieces[play][King];
+    uint64_t ownPiece = play == White ? board.whitePieces : board.blackPieces;
+
+    int src = __builtin_ctzll(piece);
+    uint64_t moves = kingAttacks[src] & ~ownPiece;
+    while (moves != 0)
+    {
+        int dest = __builtin_ctzll(moves);
+
+        uint16_t move = src | dest << 6;
+
+        list.addMove(move);
+        moves &= (moves - 1);
+    }
+}
+
 void printBoard(const Board &board)
 {
     const char symbolsW[] = {'P', 'N', 'B', 'R', 'K', 'Q'};
@@ -338,6 +390,7 @@ movesList generateMoves(const Board &board)
 
     serializePawnMoves(board, moves);
     serializeKnightMoves(board, moves);
+    serializeKingMoves(board, moves);
 
     return moves;
 }
