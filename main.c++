@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <iostream>
 using namespace std;
 
 uint64_t startingPawns = 0x000000000000FF00 & 0xff00ffffffffffff;
@@ -237,4 +238,47 @@ void serializePawnMoves(const Board &board, movesList &list)
             capturesRight &= (capturesRight - 1);
         }
     }
+}
+
+void printBoard(const Board &board)
+{
+    const char symbolsW[] = {'P', 'N', 'B', 'R', 'K', 'Q'};
+    const char symbolsB[] = {'p', 'n', 'b', 'r', 'k', 'q'};
+
+    std::cout << "\n  +-----------------+\n";
+
+    for (int rank = 7; rank >= 0; --rank)
+    {
+        std::cout << (rank + 1) << " | ";
+
+        for (int file = 0; file < 8; ++file)
+        {
+            int square = rank * 8 + file;
+            uint64_t squareMask = 1ULL << square;
+            char pieceChar = '.';
+
+            bool pieceFound = false;
+            for (int p = 0; p < 6; ++p)
+            {
+                if (board.whitePieces & squareMask)
+                {
+                    pieceChar = symbolsW[p];
+                    pieceFound = true;
+                    break;
+                }
+                if (board.blackPieces & squareMask)
+                {
+                    pieceChar = symbolsB[p];
+                    pieceFound = true;
+                    break;
+                }
+            }
+
+            std::cout << pieceChar << ' ';
+        }
+        std::cout << "|\n";
+    }
+    std::cout << "  +-----------------+\n";
+    std::cout << "    a b c d e f g h\n\n";
+    std::cout << "Side to move: " << (board.sideToMove == White ? "White" : "Black");
 }
