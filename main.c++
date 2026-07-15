@@ -75,11 +75,13 @@ public:
     }
 };
 
-struct movesList {
+struct movesList
+{
     uint16_t moves[256];
     int count = 0;
 
-    void addMove(uint16_t move){
+    void addMove(uint16_t move)
+    {
         moves[count] = move;
         ++count;
     }
@@ -90,45 +92,86 @@ int main()
     Board chessBoard;
 };
 
-movesList generateMoves(const Board& board) {
+movesList generateMoves(const Board &board)
+{
 
-    uint16_t move; // 0-5 source, 6-11 destination, 12-13 promotion piece, 13-16 flags (en passsant, castle, double push)
+    // uint16_t move: bits: 0-5 source, 6-11 destination, 12-13 promotion piece, 13-16 flags (en passsant, castle, double push)
 
     movesList moves;
+
+    serializePawnMoves(board, moves);
 
     return moves;
 }
 
-void serializePawnMoves(const Board& board, movesList& list){
+void serializePawnMoves(const Board &board, movesList &list)
+{
 
     uint16_t emptySquares = ~board.allPieces;
-    
+
     uint16_t rank4 = 0xff000000;
 
     uint64_t wPawns = board.pieces[White][Pawn];
+    
+    //Single Pushes
     uint64_t singlePushes = (wPawns << 8) & emptySquares;
-    while (singlePushes != 0){
+    while (singlePushes != 0)
+    {
         int dest = __builtin_ctzll(singlePushes);
         int src = dest - 8;
-        
+
         uint16_t move = src | (dest << 6);
 
         list.addMove(move);
 
-        singlePushes &= (singlePushes-1);
+        singlePushes &= (singlePushes - 1);
     }
 
+    //Double Pushes
     uint64_t doublePushes = (singlePushes << 8) & emptySquares & rank4;
-    while (doublePushes != 0){
+    while (doublePushes != 0)
+    {
         int dest = __builtin_ctzll(doublePushes);
         int src = dest - 16;
-        
+
         uint16_t flag = (1 << 14);
         uint16_t move = src | (dest << 6) | flag;
 
         list.addMove(move);
 
-        doublePushes &= (doublePushes-1);
+        doublePushes &= (doublePushes - 1);
     }
 
+    // Captures
+    uint64_t notFileH = 0x7F7F7F7F7F7F7F7F;
+
+    uint64_t capturesLeft = (wPawns << 7) & board.blackPieces & notFileH;
+
+    while (capturesLeft != 0)
+    {
+        int dest = __builtin_ctzll(capturesLeft);
+        int src = dest - 7;
+
+        uint16_t move = src | (dest << 6);
+
+        list.addMove(move);
+
+        capturesLeft &= (capturesLeft - 1);
+    }
+
+    uint64_t notFileA = 0xFEFEFEFEFEFEFEFE;
+
+    uint64_t capturesRight = (wPawns << 9) & board.blackPieces & notFileA;
+
+    while (capturesRight != 0)
+    {
+        int dest = __builtin_ctzll(capturesRight);
+        int src = dest - 9;
+
+        uint16_t move = src | (dest << 6);
+
+        list.addMove(move);
+
+        capturesRight &= (capturesRight - 1);
+    }
 }
