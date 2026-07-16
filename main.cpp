@@ -1,5 +1,7 @@
 #include <cstdint>
 #include <iostream>
+#include <string>
+
 using namespace std;
 
 enum PieceTypes
@@ -443,7 +445,7 @@ void serializeQueenMoves(const Board &board, movesList &list)
         {0, -1}};
 
     Color side = board.sideToMove;
-    uint64_t squares = board.pieces[side][Bishop];
+    uint64_t squares = board.pieces[side][Queen];
     uint64_t sidePieces = side == White ? board.whitePieces : board.blackPieces;
 
     while (squares != 0)
@@ -577,16 +579,97 @@ bool makeMove(Board &board, uint16_t move)
     return true;
 }
 
+int cordToMove(const std::string &input)
+{
+    if (input.length() != 2)
+    {
+        return -1;
+    }
+
+    char startFile = input[0];
+    char startRow = input[1];
+
+    if (startFile < 'a' || startFile > 'h')
+    {
+        return -1;
+    }
+    if (startRow < '1' || startRow > '8')
+    {
+        return -1;
+    }
+
+    int fileIndex = startFile - 'a';
+    int rowIndex = startRow - '1';
+
+    return rowIndex * 8 + fileIndex;
+}
+
+bool findMove(const movesList moves, int source, int dest, uint16_t &foundMove)
+{
+    for (int i = 0; i < moves.count; ++i)
+    {
+        uint16_t move = moves.moves[i];
+
+        int src = move & 0x3F;
+        int destination = (move >> 6) & 0x3f;
+
+        if (src == source && dest == destination)
+        {
+            foundMove = move;
+            return true;
+        }
+    }
+    return false;
+}
+
 int main()
 {
     knightLookup();
     kingLookup();
     Board chessBoard;
+    movesList moves;
 
     printBoard(chessBoard);
+    while (true)
+    {
+        printBoard(chessBoard);
+        moves = generateMoves(chessBoard);
 
-    movesList moves = generateMoves(chessBoard);
+        std::cout << "\n enter a move like e2e3 or f2f4";
+        std::string input;
+        std::cin >> input;
+
+        if (input == "quit")
+        {
+            break;
+        }
+        else if (input.length() != 4)
+        {
+            std::cout << "\n invalid format, please say something like a2a4";
+            continue;
+        }
+
+        int source = cordToMove(input.substr(0, 2));
+        int dest = cordToMove(input.substr(2, 2));
+
+        if (source == -1 || dest == -1)
+        {
+            std::cout << "\n invalid move";
+        }
+
+        uint16_t foundMove;
+
+        if (!findMove(moves, source, dest, foundMove))
+        {
+            std::cout << "\n that is not a legal move";
+            continue;
+        }
+        if (!makeMove(chessBoard, foundMove))
+        {
+            std::cout << "\n could not make that move";
+        }
+    }
+
     makeMove(chessBoard, moves.moves[10]);
     std::cout << moves.count;
-    printBoard(chessBoard);
 };
