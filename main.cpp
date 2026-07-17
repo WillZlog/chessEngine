@@ -5,6 +5,11 @@
 
 using namespace std;
 
+struct PieceTexture
+{
+    Texture2D textures[2][6];
+};
+
 enum PieceTypes
 {
     Pawn,
@@ -20,6 +25,27 @@ enum myColor
     White = 0,
     Black = 1
 };
+
+PieceTexture loadPieceTextures()
+{
+    PieceTexture result{};
+
+    result.textures[White][Pawn] = LoadTexture("assets/whitePawn.png");
+    result.textures[White][Bishop] = LoadTexture("assets/whiteBishop.png");
+    result.textures[White][Rook] = LoadTexture("assets/whiteRook.png");
+    result.textures[White][Knight] = LoadTexture("assets/whiteKnight.png");
+    result.textures[White][Queen] = LoadTexture("assets/whiteQueen.png");
+    result.textures[White][King] = LoadTexture("assets/whiteKing.png");
+
+    result.textures[Black][Pawn] = LoadTexture("assets/blackPawn.png");
+    result.textures[Black][Bishop] = LoadTexture("assets/blackBishop.png");
+    result.textures[Black][Rook] = LoadTexture("assets/blackRook.png");
+    result.textures[Black][Knight] = LoadTexture("assets/blackKnight.png");
+    result.textures[Black][Queen] = LoadTexture("assets/blackQueen.png");
+    result.textures[Black][King] = LoadTexture("assets/blackKing.png");
+
+    return result;
+}
 
 class Board
 {
@@ -644,14 +670,8 @@ void drawBoard(int squareSize)
     }
 }
 
-void drawPieces(const Board &board, int squareSize)
+void drawPieces(const Board &board, const PieceTexture &pieceTexture, int squareSize)
 {
-    const char *whiteSymbols[6] = {
-        "P", "N", "B", "R", "K", "Q"};
-
-    const char *blackSymbols[6] = {
-        "p", "n", "b", "r", "k", "q"};
-
     for (int side = 0; side < 2; ++side)
     {
         for (int piece = 0; piece < 6; ++piece)
@@ -666,17 +686,25 @@ void drawPieces(const Board &board, int squareSize)
 
                 int screenRank = 7 - rank;
 
-                const char *symbol = side == White ? whiteSymbols[piece] : blackSymbols[piece];
+                Texture2D texture = pieceTexture.textures[side][piece];
 
-                int fontSize = squareSize / 2;
+                Rectangle source = {
+                    0.0f,
+                    0.0f,
+                    static_cast<float>(texture.width),
+                    static_cast<float>(texture.height)};
 
-                int textWidth = MeasureText(symbol, fontSize);
+                float padding = squareSize * 0.08f;
 
-                int x = file * squareSize + (squareSize - textWidth) / 2;
+                Rectangle dest = {
+                    file * static_cast<float>(squareSize) + padding,
+                    screenRank * static_cast<float>(squareSize) + padding,
+                    squareSize - padding * 2,
+                    squareSize - padding * 2,
+                };
 
-                int y = screenRank * squareSize + (squareSize - fontSize) / 2;
-
-                DrawText(symbol, x, y, fontSize, side == White ? WHITE : BLACK);
+                DrawTexturePro(
+                    texture, source, dest, Vector2{0.0f, 0.0f}, 0.0f, WHITE);
 
                 squares &= squares - 1;
             }
@@ -739,7 +767,8 @@ int main()
     InitWindow(boardSize, boardSize, "Chess");
     SetTargetFPS(60);
 
-    printBoard(chessBoard);
+    PieceTexture pieceTexture = loadPieceTextures();
+
     while (!WindowShouldClose())
     {
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
@@ -772,7 +801,7 @@ int main()
 
         drawBoard(squareSize);
         drawSelectedSquare(selectedSqaure, squareSize);
-        drawPieces(chessBoard, squareSize);
+        drawPieces(chessBoard, pieceTexture, squareSize);
 
         EndDrawing();
         // moves = generateMoves(chessBoard);

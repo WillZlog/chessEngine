@@ -10,7 +10,7 @@
 
 ## Roadmap
 
-1. Add better images for the chess pieces
+1. ~~Add better images for the chess pieces~~
 2. Incorporate making sure moves are legal
 3. Add checkmates
 4. Add a better start game / rematch GUI
