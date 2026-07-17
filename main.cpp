@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <iostream>
 #include <string>
+#include <raylib.h>
 
 using namespace std;
 
@@ -14,7 +15,7 @@ enum PieceTypes
     Queen
 };
 
-enum Color
+enum myColor
 {
     White = 0,
     Black = 1
@@ -31,7 +32,7 @@ public:
     uint64_t blackPieces;
     uint64_t allPieces;
 
-    Color sideToMove = White;
+    myColor sideToMove = White;
 
     int castlingRights;
     int enPassantSquare;
@@ -297,7 +298,7 @@ void serializePawnMoves(const Board &board, movesList &list)
 
 void serializeKnightMoves(const Board &board, movesList &list)
 {
-    Color play = board.sideToMove;
+    myColor play = board.sideToMove;
     uint64_t myKnights = board.pieces[play][Knight];
     uint64_t playPieces = (play == White) ? board.whitePieces : board.blackPieces;
 
@@ -323,7 +324,7 @@ void serializeKnightMoves(const Board &board, movesList &list)
 
 void serializeKingMoves(const Board &board, movesList &list)
 {
-    Color play = board.sideToMove;
+    myColor play = board.sideToMove;
     uint64_t piece = board.pieces[play][King];
     uint64_t ownPiece = play == White ? board.whitePieces : board.blackPieces;
 
@@ -380,7 +381,7 @@ void serializeRookMoves(const Board &board, movesList &list)
         {0, 1},
         {0, -1}};
 
-    Color side = board.sideToMove;
+    myColor side = board.sideToMove;
     uint64_t squares = board.pieces[side][Rook];
     uint64_t sidePieces = side == White ? board.whitePieces : board.blackPieces;
 
@@ -410,7 +411,7 @@ void serializeBishopMoves(const Board &board, movesList &list)
         {1, -1},
         {-1, -1}};
 
-    Color side = board.sideToMove;
+    myColor side = board.sideToMove;
     uint64_t squares = board.pieces[side][Bishop];
     uint64_t sidePieces = side == White ? board.whitePieces : board.blackPieces;
 
@@ -444,7 +445,7 @@ void serializeQueenMoves(const Board &board, movesList &list)
         {0, 1},
         {0, -1}};
 
-    Color side = board.sideToMove;
+    myColor side = board.sideToMove;
     uint64_t squares = board.pieces[side][Queen];
     uint64_t sidePieces = side == White ? board.whitePieces : board.blackPieces;
 
@@ -534,8 +535,8 @@ bool makeMove(Board &board, uint16_t move)
     uint64_t srcMask = 1ULL << src;
     uint64_t destMask = 1ULL << dest;
 
-    Color movingSide = board.sideToMove;
-    Color enemySide = movingSide == White ? Black : White;
+    myColor movingSide = board.sideToMove;
+    myColor enemySide = movingSide == White ? Black : White;
 
     int movingPiece = -1;
 
@@ -622,6 +623,67 @@ bool findMove(const movesList moves, int source, int dest, uint16_t &foundMove)
     return false;
 }
 
+void drawBoard(int squareSize)
+{
+    for (int i = 0; i < 8; ++i)
+    {
+        for (int j = 0; j < 8; ++j)
+        {
+            bool lightSquare = ((i + j) % 2 == 0);
+            Color color = lightSquare ? Color{240, 217, 181, 255} : Color{181, 136, 99, 255};
+
+            int screenR = 7 - i;
+
+            DrawRectangle(
+                j * squareSize,
+                screenR * squareSize,
+                squareSize,
+                squareSize,
+                color);
+        }
+    }
+}
+
+void drawPieces(const Board &board, int squareSize)
+{
+    const char *whiteSymbols[6] = {
+        "P", "N", "B", "R", "K", "Q"};
+
+    const char *blackSymbols[6] = {
+        "p", "n", "b", "r", "k", "q"};
+
+    for (int side = 0; side < 2; ++side)
+    {
+        for (int piece = 0; piece < 6; ++piece)
+        {
+            uint64_t squares = board.pieces[side][piece];
+
+            while (squares != 0)
+            {
+                int square = __builtin_ctzll(squares);
+                int file = square % 8;
+                int rank = square / 8;
+
+                int screenRank = 7 - rank;
+
+                const char *symbol = side == White ? whiteSymbols[piece] : blackSymbols[piece];
+
+                int fontSize = squareSize / 2;
+
+                int textWidth = MeasureText(symbol, fontSize);
+
+                int x = file * squareSize + (squareSize - textWidth) / 2;
+
+                int y = screenRank * squareSize + (squareSize - fontSize) / 2;
+
+                DrawText(symbol, x, y, fontSize, side == White ? WHITE : BLACK);
+
+                squares &= squares - 1;
+            }
+        }
+    }
+}
+
 int main()
 {
     knightLookup();
@@ -629,9 +691,21 @@ int main()
     Board chessBoard;
     movesList moves;
 
+    const int squareSize = 100;
+    const int boardSize = squareSize * 8;
+
+    InitWindow(boardSize, boardSize, "Chess");
+    SetTargetFPS(60);
+
     printBoard(chessBoard);
-    while (true)
+    while (!WindowShouldClose())
     {
+        BeginDrawing();
+        ClearBackground(RAYWHITE);
+        drawBoard(squareSize);
+        drawPieces(chessBoard, squareSize);
+        EndDrawing();
+
         printBoard(chessBoard);
         moves = generateMoves(chessBoard);
 
