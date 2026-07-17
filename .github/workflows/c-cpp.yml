@@ -1,4 +1,4 @@
-name: Build C++ Raylib Project
+name: Build Chess Engine
 
 on:
   push:
