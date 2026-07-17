@@ -804,44 +804,5 @@ int main()
         drawPieces(chessBoard, pieceTexture, squareSize);
 
         EndDrawing();
-        // moves = generateMoves(chessBoard);
-
-        //     std::cout << "\n enter a move like e2e3 or f2f4";
-        //     std::string input;
-        //     std::cin >> input;
-
-        //     if (input == "quit")
-        //     {
-        //         break;
-        //     }
-        //     else if (input.length() != 4)
-        //     {
-        //         std::cout << "\n invalid format, please say something like a2a4";
-        //         continue;
-        //     }
-
-        //     int source = cordToMove(input.substr(0, 2));
-        //     int dest = cordToMove(input.substr(2, 2));
-
-        //     if (source == -1 || dest == -1)
-        //     {
-        //         std::cout << "\n invalid move";
-        //     }
-
-        //     uint16_t foundMove;
-
-        //     if (!findMove(moves, source, dest, foundMove))
-        //     {
-        //         std::cout << "\n that is not a legal move";
-        //         continue;
-        //     }
-        //     if (!makeMove(chessBoard, foundMove))
-        //     {
-        //         std::cout << "\n could not make that move";
-        //     }
-        // }
-
-        // makeMove(chessBoard, moves.moves[10]);
-        // std::cout << moves.count;
     };
 }
