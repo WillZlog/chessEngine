@@ -569,21 +569,24 @@ int getPieceAtSquare(const Board &board, int square)
     return -1;
 }
 
-bool isInCheck(Board &board)
+bool isInCheck(const Board &board)
 {
     // run after move is made, but before finalizing move
-    myColor side = board.sideToMove;
+
+    Board copy = board;
+
+    myColor side = copy.sideToMove;
     myColor opponent = (side == White) ? Black : White;
 
-    board.sideToMove = opponent;
+    copy.sideToMove = opponent;
 
-    movesList moves = generateMoves(board);
+    movesList moves = generateMoves(copy);
 
-    board.sideToMove = side;
+    copy.sideToMove = side;
 
-    uint64_t kingSrc = board.pieces[side][King];
+    uint64_t kingSrc = copy.pieces[side][King];
 
-    uint64_t pawns = board.pieces[opponent][Pawn];
+    uint64_t pawns = copy.pieces[opponent][Pawn];
     uint64_t pawnAttacks = 0ULL;
 
     if (opponent == White)
@@ -606,7 +609,7 @@ bool isInCheck(Board &board)
 
         int src = (moves.moves[i] & 0x3F);
 
-        if (getPieceAtSquare(board, src) == Pawn)
+        if (getPieceAtSquare(copy, src) == Pawn)
         {
             continue;
         }
@@ -839,6 +842,41 @@ void unloadTextures(PieceTexture textures)
     }
 }
 
+bool hasLegalMove(const Board &board)
+{
+    movesList moves = generateMoves(board);
+
+    for (int i = 0; i < moves.count; ++i)
+    {
+        Board copy = board;
+        if (makeMove(copy, moves.moves[i]))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool isCheckmate(const Board &board)
+{
+    if (!isInCheck(board))
+    {
+        return false;
+    }
+
+    return !hasLegalMove(board);
+}
+
+bool isStalemate(const Board &board)
+{
+    if (isInCheck(board))
+    {
+        return false;
+    }
+
+    return !hasLegalMove(board);
+}
+
 int main()
 {
     knightLookup();
@@ -876,7 +914,17 @@ int main()
 
                     if (findMove(moves, selectedSqaure, clickedSquare, foundMove))
                     {
-                        makeMove(chessBoard, foundMove);
+                        if (makeMove(chessBoard, foundMove))
+                        {
+                            if (isCheckmate(chessBoard))
+                            {
+                                std::cout << "\n Checkmate \n";
+                            }
+                            else if (isStalemate(chessBoard))
+                            {
+                                std::cout << "\n Stalemate \n";
+                            }
+                        }
                     }
                     selectedSqaure = -1;
                 }
