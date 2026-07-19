@@ -5,11 +5,29 @@
 
 using namespace std;
 
-// this is a comment to update git :) (count : 1)
+// this is a comment to update git :) (count : 2)
 
 struct PieceTexture
 {
     Texture2D textures[2][6];
+};
+
+enum CastlingRights
+{
+    WhiteKingSide = 1 << 0,
+    WhiteQueenSide = 1 << 1,
+    BlackKingSide = 1 << 2,
+    BlackQueenSide = 1 << 3,
+};
+
+enum MoveFlag
+{
+    QuietMove = 0,
+    DoublePawnPush = 1,
+    KingCastle = 2,
+    QueenCastle = 3,
+    CaptureMove = 4,
+    EnPassantMove = 5
 };
 
 enum PieceTypes
@@ -242,8 +260,7 @@ void serializePawnMoves(const Board &board, movesList &list)
             int dest = __builtin_ctzll(doublePushes);
             int src = dest - 16;
 
-            uint16_t flag = (1 << 14);
-            uint16_t move = src | (dest << 6) | flag;
+            uint16_t move = src | (dest << 6) | (DoublePawnPush << 12);
 
             list.addMove(move);
 
@@ -292,8 +309,7 @@ void serializePawnMoves(const Board &board, movesList &list)
                 int diff = src - dest;
                 if (diff == 7 || diff == 9)
                 {
-                    uint16_t enpassantFlag = 2 << 12;
-                    uint16_t move = src | (dest << 6) | enpassantFlag;
+                    uint16_t move = src | (dest << 6) | (EnPassantMove << 12);
 
                     list.addMove(move);
                 }
@@ -577,6 +593,136 @@ void printBoard(const Board &board)
     std::cout << "Side to move: " << (board.sideToMove == White ? "White" : "Black");
 }
 
+bool isSquareAttacked(const Board &board, int square, myColor attacker)
+{
+    uint64_t targetMask = 1ULL << square;
+    uint64_t pawns = board.pieces[attacker][Pawn];
+    uint64_t pawnAttacks;
+
+    if (attacker == White)
+    {
+        pawnAttacks = ((pawns << 7) & 0x7F7F7F7F7F7F7F7FULL) | ((pawns << 9) & 0xFEFEFEFEFEFEFEFEULL);
+    }
+    else
+    {
+        pawnAttacks = ((pawns >> 9) & 0x7F7F7F7F7F7F7F7FULL) | ((pawns >> 7) & 0xFEFEFEFEFEFEFEFEULL);
+    }
+
+    if (pawnAttacks & targetMask)
+    {
+        return true;
+    }
+
+    if (knightAttacks[square] & board.pieces[attacker][Knight])
+    {
+        return true;
+    }
+
+    if (kingAttacks[square] & board.pieces[attacker][King])
+    {
+        return true;
+    }
+
+    const int rookDirections[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+
+    uint64_t rookRays = slidingMoves(square, board, rookDirections, 4);
+
+    if (rookRays & (board.pieces[attacker][Rook] | board.pieces[attacker][Queen]))
+    {
+        return true;
+    }
+
+    const int bishopDirections[4][2] = {{1, 1}, {-1, 1}, {1, -1}, {-1, -1}};
+
+    uint64_t bishopRays = slidingMoves(square, board, bishopDirections, 4);
+
+    if (bishopRays & (board.pieces[attacker][Bishop] | board.pieces[attacker][Queen]))
+    {
+        return true;
+    }
+
+    return false;
+}
+
+void serializeCastlingRights(const Board &board, movesList &moves)
+{
+    myColor side = board.sideToMove;
+    myColor opponent = (side == White) ? Black : White;
+
+    if (side == White)
+    {
+        if (board.castlingRights & WhiteKingSide)
+        {
+            bool KingAndRookPresent = (board.pieces[White][King] & (1ULL << 4)) && (board.pieces[White][Rook] & (1ULL << 7));
+
+            uint64_t emptyMask = (1ULL << 5) | (1ULL << 6);
+
+            bool pathEmpty = ((board.allPieces & emptyMask) == 0ULL);
+
+            bool pathSafe = !isSquareAttacked(board, 4, opponent) && !isSquareAttacked(board, 5, opponent) && !isSquareAttacked(board, 6, opponent);
+
+            if (KingAndRookPresent && pathEmpty && pathSafe)
+            {
+                uint16_t move = 4 | (6 << 6) | (KingCastle << 12);
+                moves.addMove(move);
+            }
+        }
+        if (board.castlingRights & WhiteQueenSide)
+        {
+            bool KingAndRookPresent = (board.pieces[White][King] & (1ULL << 4)) && (board.pieces[White][Rook] & (1ULL << 0));
+
+            uint64_t emptyMask = (1ULL << 1) | (1ULL << 2) | (1ULL << 3);
+
+            bool pathEmpty = ((board.allPieces & emptyMask) == 0ULL);
+
+            bool pathSafe = (!isSquareAttacked(board, 4, opponent) && !isSquareAttacked(board, 3, opponent) && !isSquareAttacked(board, 2, opponent));
+
+            if (KingAndRookPresent && pathEmpty && pathSafe)
+            {
+                uint16_t move = 4 | (2 << 6) | (QueenCastle << 12);
+
+                moves.addMove(move);
+            }
+        }
+    }
+    else
+    {
+        if (board.castlingRights & BlackKingSide)
+        {
+            bool KingAndRookPresent = (board.pieces[Black][King] & (1ULL << 60)) && (board.pieces[Black][Rook] & (1ULL << 63));
+
+            uint64_t emptyMask = (1ULL << 61) | (1ULL << 62);
+
+            bool pathEmpty = ((board.allPieces & emptyMask) == 0ULL);
+
+            bool pathSafe = !isSquareAttacked(board, 60, opponent) && !isSquareAttacked(board, 61, opponent) && !isSquareAttacked(board, 62, opponent);
+
+            if (KingAndRookPresent && pathEmpty && pathSafe)
+            {
+                uint16_t move = 60 | (62 << 6) | (KingCastle << 12);
+                moves.addMove(move);
+            }
+        }
+        if (board.castlingRights & BlackQueenSide)
+        {
+            bool KingAndRookPresent = (board.pieces[Black][King] & (1ULL << 60)) && (board.pieces[Black][Rook] & (1ULL << 56));
+
+            uint64_t emptyMask = (1ULL << 57) | (1ULL << 58) | (1ULL << 59);
+
+            bool pathEmpty = ((board.allPieces & emptyMask) == 0ULL);
+
+            bool pathSafe = (!isSquareAttacked(board, 60, opponent) && !isSquareAttacked(board, 59, opponent) && !isSquareAttacked(board, 58, opponent));
+
+            if (KingAndRookPresent && pathEmpty && pathSafe)
+            {
+                uint16_t move = 60 | (58 << 6) | (QueenCastle << 12);
+
+                moves.addMove(move);
+            }
+        }
+    }
+}
+
 movesList generateMoves(const Board &board)
 {
 
@@ -590,6 +736,7 @@ movesList generateMoves(const Board &board)
     serializeRookMoves(board, moves);
     serializeBishopMoves(board, moves);
     serializeQueenMoves(board, moves);
+    serializeCastlingRights(board, moves);
 
     return moves;
 }
@@ -608,57 +755,18 @@ int getPieceAtSquare(const Board &board, int square)
     return -1;
 }
 
-bool isInCheck(const Board &board)
+bool isInCheck(const Board &board, myColor side)
 {
-    // run after move is made, but before finalizing move
+    uint64_t king = board.pieces[side][King];
 
-    Board copy = board;
-
-    myColor side = copy.sideToMove;
-    myColor opponent = (side == White) ? Black : White;
-
-    copy.sideToMove = opponent;
-
-    movesList moves = generateMoves(copy);
-
-    copy.sideToMove = side;
-
-    uint64_t kingSrc = copy.pieces[side][King];
-
-    uint64_t pawns = copy.pieces[opponent][Pawn];
-    uint64_t pawnAttacks = 0ULL;
-
-    if (opponent == White)
+    if (king == 0ULL)
     {
-        pawnAttacks = ((pawns << 7) & 0x7F7F7F7F7F7F7F7FULL) | ((pawns << 9) & 0xFEFEFEFEFEFEFEFEULL);
-    }
-    else
-    {
-        pawnAttacks = ((pawns >> 9) & 0x7F7F7F7F7F7F7F7FULL) | ((pawns >> 7) & 0xFEFEFEFEFEFEFEFEULL);
-    }
-    if (pawnAttacks & kingSrc)
-    {
-        return true;
+        return false;
     }
 
-    for (int i = 0; i < moves.count; ++i)
-    {
-        int destination = (moves.moves[i] >> 6) & 0x3f;
-        uint64_t destMask = 1ULL << destination;
+    int kingSquare = __builtin_ctzll(king);
 
-        int src = (moves.moves[i] & 0x3F);
-
-        if (getPieceAtSquare(copy, src) == Pawn)
-        {
-            continue;
-        }
-
-        if (kingSrc & destMask)
-        {
-            return true;
-        }
-    }
-    return false;
+    return isSquareAttacked(board, kingSquare, (side == White) ? Black : White);
 }
 
 bool makeMove(Board &board, uint16_t move)
@@ -708,12 +816,71 @@ bool makeMove(Board &board, uint16_t move)
     }
 
     uint16_t flag = (move >> 12) & 0xF;
-    if (flag == 2)
+    if (flag == EnPassantMove)
     {
         int capturedPawn = (movingSide == White) ? dest - 8 : dest + 8;
 
         board.pieces[enemySide][Pawn] &= ~(1ULL << capturedPawn);
     }
+    if (flag == KingCastle)
+    {
+        if (movingSide == White)
+        {
+            board.pieces[White][Rook] &= ~(1ULL << 7);
+            board.pieces[White][Rook] |= (1ULL << 5);
+        }
+        if (movingSide == Black)
+        {
+            board.pieces[Black][Rook] &= ~(1ULL << 63);
+            board.pieces[Black][Rook] |= (1ULL << 61);
+        }
+    }
+    if (flag == QueenCastle)
+    {
+        if (movingSide == White)
+        {
+            board.pieces[White][Rook] &= ~(1ULL << 0);
+            board.pieces[White][Rook] |= (1ULL << 3);
+        }
+        if (movingSide == Black)
+        {
+            board.pieces[Black][Rook] &= ~(1ULL << 56);
+            board.pieces[Black][Rook] |= (1ULL << 59);
+        }
+    }
+
+    if (movingPiece == King)
+    {
+        if (movingSide == White)
+        {
+            board.castlingRights &= ~(WhiteKingSide | WhiteQueenSide);
+        }
+        else
+        {
+            board.castlingRights &= ~(BlackKingSide | BlackQueenSide);
+        }
+    }
+
+    if (movingPiece == Rook)
+    {
+        if (src == 0)
+            board.castlingRights &= ~WhiteQueenSide;
+        else if (src == 7)
+            board.castlingRights &= ~WhiteKingSide;
+        else if (src == 56)
+            board.castlingRights &= ~BlackQueenSide;
+        else if (src == 63)
+            board.castlingRights &= ~BlackKingSide;
+    }
+
+    if (dest == 0)
+        board.castlingRights &= ~WhiteQueenSide;
+    else if (dest == 7)
+        board.castlingRights &= ~WhiteKingSide;
+    else if (dest == 56)
+        board.castlingRights &= ~BlackQueenSide;
+    else if (dest == 63)
+        board.castlingRights &= ~BlackKingSide;
 
     board.pieces[movingSide][movingPiece] |= destMask;
 
@@ -733,7 +900,7 @@ bool makeMove(Board &board, uint16_t move)
         board.enPassantDest = (src + dest) / 2;
     }
 
-    if (isInCheck(board))
+    if (isInCheck(board, board.sideToMove))
     {
         board = boardCopy;
         return false;
@@ -920,7 +1087,7 @@ bool hasLegalMove(const Board &board)
 
 bool isCheckmate(const Board &board)
 {
-    if (!isInCheck(board))
+    if (!isInCheck(board, board.sideToMove))
     {
         return false;
     }
@@ -930,7 +1097,7 @@ bool isCheckmate(const Board &board)
 
 bool isStalemate(const Board &board)
 {
-    if (isInCheck(board))
+    if (isInCheck(board, board.sideToMove))
     {
         return false;
     }
@@ -945,10 +1112,12 @@ int main()
     Board chessBoard;
     movesList moves;
 
+    chessBoard.castlingRights = WhiteKingSide | WhiteQueenSide | BlackKingSide | BlackQueenSide;
+
     const int squareSize = 100;
     const int boardSize = squareSize * 8;
 
-    int selectedSqaure = -1;
+    int selectedsquare = -1;
 
     InitWindow(boardSize, boardSize, "Chess");
     SetTargetFPS(60);
@@ -964,16 +1133,16 @@ int main()
 
             if (clickedSquare != -1)
             {
-                if (selectedSqaure == -1)
+                if (selectedsquare == -1)
                 {
-                    selectedSqaure = clickedSquare;
+                    selectedsquare = clickedSquare;
                 }
                 else
                 {
                     moves = generateMoves(chessBoard);
                     uint16_t foundMove = 0;
 
-                    if (findMove(moves, selectedSqaure, clickedSquare, foundMove))
+                    if (findMove(moves, selectedsquare, clickedSquare, foundMove))
                     {
                         if (makeMove(chessBoard, foundMove))
                         {
@@ -987,7 +1156,7 @@ int main()
                             }
                         }
                     }
-                    selectedSqaure = -1;
+                    selectedsquare = -1;
                 }
             }
         }
@@ -996,7 +1165,7 @@ int main()
         ClearBackground(RAYWHITE);
 
         drawBoard(squareSize);
-        drawSelectedSquare(selectedSqaure, squareSize);
+        drawSelectedSquare(selectedsquare, squareSize);
         drawPieces(chessBoard, pieceTexture, squareSize);
 
         EndDrawing();
