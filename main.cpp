@@ -27,7 +27,15 @@ enum MoveFlag
     KingCastle = 2,
     QueenCastle = 3,
     CaptureMove = 4,
-    EnPassantMove = 5
+    EnPassantMove = 5,
+    PromoteKnight = 8,
+    PromoteBishop = 9,
+    PromoteRook = 10,
+    PromoteQueen = 11,
+    PromoteKnightCapture = 12,
+    PromoteBishopCapture = 13,
+    PromoteRookCapture = 14,
+    PromoteQueenCapture = 15,
 };
 
 enum PieceTypes
@@ -208,10 +216,25 @@ void kingLookup()
     }
 }
 
+void addPromotionMoves(movesList &list, int src, int dest, bool capture)
+{
+    int firstFlag = capture ? PromoteKnightCapture : PromoteKnight;
+
+    for (int flag = firstFlag; flag < firstFlag + 4; ++flag)
+    {
+        uint16_t move = src | (dest << 6) | (flag << 12);
+
+        list.addMove(move);
+    }
+}
+
 void serializePawnMoves(const Board &board, movesList &list)
 {
 
     uint64_t emptySquares = ~board.allPieces;
+
+    const uint64_t rank8 = 0xFF00000000000000ULL;
+    const uint64_t rank1 = 0x00000000000000FFULL;
 
     if (board.sideToMove == White)
     {
@@ -246,9 +269,17 @@ void serializePawnMoves(const Board &board, movesList &list)
             int dest = __builtin_ctzll(singlePushes);
             int src = dest - 8;
 
-            uint16_t move = src | (dest << 6);
+            uint64_t destMask = 1ULL << dest;
 
-            list.addMove(move);
+            if (destMask & rank8)
+            {
+                addPromotionMoves(list, src, dest, false);
+            }
+            else
+            {
+                uint16_t move = src | (dest << 6);
+                list.addMove(move);
+            }
 
             singlePushes &= (singlePushes - 1);
         }
@@ -274,9 +305,17 @@ void serializePawnMoves(const Board &board, movesList &list)
             int dest = __builtin_ctzll(capturesLeft);
             int src = dest - 7;
 
-            uint16_t move = src | (dest << 6);
+            uint64_t destMask = 1ULL << dest;
 
-            list.addMove(move);
+            if (destMask & rank8)
+            {
+                addPromotionMoves(list, src, dest, true);
+            }
+            else
+            {
+                uint16_t move = src | (dest << 6);
+                list.addMove(move);
+            }
 
             capturesLeft &= (capturesLeft - 1);
         }
@@ -288,9 +327,17 @@ void serializePawnMoves(const Board &board, movesList &list)
             int dest = __builtin_ctzll(capturesRight);
             int src = dest - 9;
 
-            uint16_t move = src | (dest << 6);
+            uint64_t destMask = 1ULL << dest;
 
-            list.addMove(move);
+            if (destMask & rank8)
+            {
+                addPromotionMoves(list, src, dest, true);
+            }
+            else
+            {
+                uint16_t move = src | (dest << 6);
+                list.addMove(move);
+            }
 
             capturesRight &= (capturesRight - 1);
         }
@@ -327,9 +374,17 @@ void serializePawnMoves(const Board &board, movesList &list)
             int dest = __builtin_ctzll(singlePushes);
             int src = dest + 8;
 
-            uint16_t move = src | (dest << 6);
+            uint64_t destMask = 1ULL << dest;
 
-            list.addMove(move);
+            if (destMask & rank1)
+            {
+                addPromotionMoves(list, src, dest, false);
+            }
+            else
+            {
+                uint16_t move = src | (dest << 6);
+                list.addMove(move);
+            }
 
             singlePushes &= (singlePushes - 1);
         }
@@ -355,9 +410,17 @@ void serializePawnMoves(const Board &board, movesList &list)
             int dest = __builtin_ctzll(capturesLeft);
             int src = dest + 9;
 
-            uint16_t move = src | (dest << 6);
+            uint64_t destMask = 1ULL << dest;
 
-            list.addMove(move);
+            if (destMask & rank1)
+            {
+                addPromotionMoves(list, src, dest, true);
+            }
+            else
+            {
+                uint16_t move = src | (dest << 6);
+                list.addMove(move);
+            }
 
             capturesLeft &= (capturesLeft - 1);
         }
@@ -369,9 +432,17 @@ void serializePawnMoves(const Board &board, movesList &list)
             int dest = __builtin_ctzll(capturesRight);
             int src = dest + 7;
 
-            uint16_t move = src | (dest << 6);
+            uint64_t destMask = 1ULL << dest;
 
-            list.addMove(move);
+            if (destMask & rank1)
+            {
+                addPromotionMoves(list, src, dest, true);
+            }
+            else
+            {
+                uint16_t move = src | (dest << 6);
+                list.addMove(move);
+            }
 
             capturesRight &= (capturesRight - 1);
         }
@@ -881,7 +952,39 @@ bool makeMove(Board &board, uint16_t move)
     else if (dest == 63)
         board.castlingRights &= ~BlackKingSide;
 
-    board.pieces[movingSide][movingPiece] |= destMask;
+    int promotionPiece = -1;
+
+    switch (flag)
+    {
+    case PromoteKnight:
+    case PromoteKnightCapture:
+        promotionPiece = Knight;
+        break;
+
+    case PromoteBishop:
+    case PromoteBishopCapture:
+        promotionPiece = Bishop;
+        break;
+
+    case PromoteRook:
+    case PromoteRookCapture:
+        promotionPiece = Rook;
+        break;
+
+    case PromoteQueen:
+    case PromoteQueenCapture:
+        promotionPiece = Queen;
+        break;
+    }
+
+    if (promotionPiece != -1)
+    {
+        board.pieces[movingSide][promotionPiece] |= destMask;
+    }
+    else
+    {
+        board.pieces[movingSide][movingPiece] |= destMask;
+    }
 
     board.updateOccupancy();
 
@@ -937,7 +1040,7 @@ int cordToMove(const std::string &input)
     return rowIndex * 8 + fileIndex;
 }
 
-bool findMove(const movesList moves, int source, int dest, uint16_t &foundMove)
+bool findMove(const movesList &moves, int source, int dest, uint16_t &foundMove)
 {
     for (int i = 0; i < moves.count; ++i)
     {
@@ -1048,7 +1151,7 @@ int mouseToSquare(int x, int y, int squareSize)
     {
         return -1;
     }
-    if (rank < 0 || rank > 8)
+    if (rank < 0 || rank >= 8)
     {
         return -1;
     }
@@ -1104,6 +1207,109 @@ bool isStalemate(const Board &board)
     return !hasLegalMove(board);
 }
 
+bool isPromotionMove(int flag)
+{
+    return flag >= PromoteKnight && flag <= PromoteQueenCapture;
+}
+
+bool findPromotionMoves(const movesList &list, int src, int dest, movesList &results)
+{
+    results.count = 0;
+    for (int i = 0; i < list.count; ++i)
+    {
+        uint16_t move = list.moves[i];
+
+        int moveSource = move & 0x3F;
+        int moveDest = (move >> 6) & 0x3F;
+        int flag = (move >> 12) & 0xF;
+
+        if (moveSource == src && moveDest == dest && isPromotionMove(flag))
+        {
+            results.addMove(move);
+        }
+    }
+    return results.count > 0;
+}
+
+void drawPromotionMenu(const PieceTexture &pieceTextures, myColor side, int squareSize)
+{
+    const int promotionPieces[4] = {
+        Knight,
+        Bishop,
+        Rook,
+        Queen};
+
+    int menuWidth = squareSize * 4;
+    int menuX = (GetScreenWidth() - menuWidth) / 2;
+    int menuY = (GetScreenHeight() - squareSize) / 2;
+
+    DrawRectangle(
+        menuX - 8,
+        menuY - 8,
+        menuWidth + 16,
+        squareSize + 16,
+        DARKGRAY);
+
+    for (int i = 0; i < 4; ++i)
+    {
+        int x = menuX + i * squareSize;
+        DrawRectangle(x, menuY, squareSize, squareSize, Color{230, 230, 230, 255});
+        DrawRectangleLines(x, menuY, squareSize, squareSize, BLACK);
+
+        Texture2D texture = pieceTextures.textures[side][promotionPieces[i]];
+
+        Rectangle source = {0.0f, 0.0f, static_cast<float>(texture.width), static_cast<float>(texture.height)};
+
+        float padding = squareSize * 0.08f;
+
+        Rectangle dest = {static_cast<float>(x) + padding, static_cast<float>(menuY) + padding, squareSize - padding * 2.0f, squareSize - padding * 2.0f};
+
+        DrawTexturePro(texture, source, dest, Vector2{0.0f, 0.0f}, 0.0f, WHITE);
+    }
+}
+
+bool handlePromotionClick(Board &board, const movesList &promotionList, int squareSize)
+{
+    Vector2 mouse = GetMousePosition();
+    int menuWidth = squareSize * 4;
+    int menuX = (GetScreenWidth() - menuWidth) / 2;
+    int menuY = (GetScreenHeight() - squareSize) / 2;
+
+    if (mouse.x < menuX || mouse.x >= menuX + menuWidth || mouse.y < menuY || mouse.y >= menuY + squareSize)
+    {
+        return false;
+    }
+    int option = static_cast<int>(mouse.x - menuX) / squareSize;
+
+    for (int i = 0; i < promotionList.count; ++i)
+    {
+        uint16_t move = promotionList.moves[i];
+        int flag = (move >> 12) & 0xF;
+
+        int promotionOption;
+
+        if (flag >= PromoteKnight && flag <= PromoteQueen)
+        {
+            promotionOption = flag - PromoteKnight;
+        }
+        else if (flag >= PromoteKnightCapture && flag <= PromoteQueenCapture)
+        {
+            promotionOption = flag - PromoteKnightCapture;
+        }
+        else
+        {
+            continue;
+        }
+
+        if (promotionOption == option)
+        {
+            return makeMove(board, move);
+        }
+    }
+
+    return false;
+}
+
 int main()
 {
     knightLookup();
@@ -1117,6 +1323,10 @@ int main()
     const int boardSize = squareSize * 8;
 
     int selectedsquare = -1;
+    bool choosingPromotion = false;
+    int promotionSource = -1;
+    int promotionDest = -1;
+    movesList promotionMoves;
 
     InitWindow(boardSize, boardSize, "Chess");
     SetTargetFPS(60);
@@ -1127,35 +1337,68 @@ int main()
     {
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
         {
-            Vector2 mouse = GetMousePosition();
-            int clickedSquare = mouseToSquare(static_cast<int>(mouse.x), static_cast<int>(mouse.y), squareSize);
-
-            if (clickedSquare != -1)
+            if (choosingPromotion)
             {
-                if (selectedsquare == -1)
+                if (handlePromotionClick(chessBoard, promotionMoves, squareSize))
                 {
-                    selectedsquare = clickedSquare;
-                }
-                else
-                {
-                    moves = generateMoves(chessBoard);
-                    uint16_t foundMove = 0;
-
-                    if (findMove(moves, selectedsquare, clickedSquare, foundMove))
+                    choosingPromotion = false;
+                    promotionSource = -1;
+                    promotionDest = -1;
+                    if (isCheckmate(chessBoard))
                     {
-                        if (makeMove(chessBoard, foundMove))
+                        std::cout << "\n Checkmate \n";
+                    }
+                    else if (isStalemate(chessBoard))
+                    {
+                        std::cout << "\n Stalemate \n";
+                    }
+                }
+            }
+            else
+            {
+                Vector2 mouse = GetMousePosition();
+                int clickedSquare = mouseToSquare(static_cast<int>(mouse.x), static_cast<int>(mouse.y), squareSize);
+
+                if (clickedSquare != -1)
+                {
+                    if (selectedsquare == -1)
+                    {
+                        selectedsquare = clickedSquare;
+                    }
+                    else
+                    {
+                        moves = generateMoves(chessBoard);
+
+                        movesList matchingPromotions;
+
+                        if (findPromotionMoves(moves, selectedsquare, clickedSquare, matchingPromotions))
                         {
-                            if (isCheckmate(chessBoard))
+                            choosingPromotion = true;
+                            promotionSource = selectedsquare;
+                            promotionDest = clickedSquare;
+                            promotionMoves = matchingPromotions;
+                        }
+                        else
+                        {
+                            uint16_t foundMove = 0;
+
+                            if (findMove(moves, selectedsquare, clickedSquare, foundMove))
                             {
-                                std::cout << "\n Checkmate \n";
-                            }
-                            else if (isStalemate(chessBoard))
-                            {
-                                std::cout << "\n Stalemate \n";
+                                if (makeMove(chessBoard, foundMove))
+                                {
+                                    if (isCheckmate(chessBoard))
+                                    {
+                                        std::cout << "\n Checkmate \n";
+                                    }
+                                    else if (isStalemate(chessBoard))
+                                    {
+                                        std::cout << "\n Stalemate \n";
+                                    }
+                                }
                             }
                         }
+                        selectedsquare = -1;
                     }
-                    selectedsquare = -1;
                 }
             }
         }
@@ -1166,6 +1409,11 @@ int main()
         drawBoard(squareSize);
         drawSelectedSquare(selectedsquare, squareSize);
         drawPieces(chessBoard, pieceTexture, squareSize);
+
+        if (choosingPromotion)
+        {
+            drawPromotionMenu(pieceTexture, chessBoard.sideToMove, squareSize);
+        }
 
         EndDrawing();
     };
