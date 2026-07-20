@@ -226,8 +226,7 @@ void serializePawnMoves(const Board &board, movesList &list)
                 int diff = dest - src;
                 if (diff == 7 || diff == 9)
                 {
-                    uint16_t enpassantFlag = 2 << 12;
-                    uint16_t move = src | (dest << 6) | enpassantFlag;
+                    uint16_t move = src | (dest << 6) | (EnPassantMove << 12);
 
                     list.addMove(move);
                 }

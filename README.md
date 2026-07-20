@@ -6,14 +6,14 @@
 
 ## Current State
 
-* As of 07/18/26, the GUI is running, moves work, checks, checkmates, and stalemates work too, but en passant and castling don't work yet.
+* As of 07/19/26, the GUI is running, moves work, checks, checkmates, and stalemates work too. en passant and castling work now too, but working on pawn promotion.
 
 ## Roadmap
 
 1. ~~Add better images for the chess pieces~~
 2. ~~Incorporate making sure moves are legal~~
 3. ~~Add checkmates~~
-4. En Passant and castling
+4. ~~En Passant and castling~~
 5. Pawn Promotion
 6. Add a better start game / rematch GUI
 7. Self trained evaluation bar
