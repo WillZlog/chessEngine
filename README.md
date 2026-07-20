@@ -14,7 +14,7 @@
 2. ~~Incorporate making sure moves are legal~~
 3. ~~Add checkmates~~
 4. ~~En Passant and castling~~
-5. Pawn Promotion
+5. ~~Pawn Promotion~~
 6. Add a better start game / rematch GUI
 7. Self trained evaluation bar
 8. Different bot strengths
