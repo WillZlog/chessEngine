@@ -1310,6 +1310,27 @@ bool handlePromotionClick(Board &board, const movesList &promotionList, int squa
     return false;
 }
 
+uint64_t perft(Board board, int depth)
+{
+    if (depth == 0)
+    {
+        return 1;
+    }
+
+    movesList moves = generateMoves(board);
+    uint64_t nodes = 0;
+
+    for (int i = 0; i < moves.count; ++i)
+    {
+        Board copy = board;
+        if (makeMove(copy, moves.moves[i]))
+        {
+            nodes += perft(copy, depth - 1);
+        }
+    }
+    return nodes;
+}
+
 int main()
 {
     knightLookup();
@@ -1422,3 +1443,20 @@ int main()
     CloseWindow();
     return 0;
 }
+
+//! USE THIS MAIN ONLY FOR TESTING
+// int main()
+// {
+//     Board chessBoard;
+//     knightLookup();
+//     kingLookup();
+
+//     std::cout << "Depth 1: " << perft(chessBoard, 1) << '\n';
+//     std::cout << "Depth 2: " << perft(chessBoard, 2) << '\n';
+//     std::cout << "Depth 3: " << perft(chessBoard, 3) << '\n';
+//     std::cout << "Depth 4: " << perft(chessBoard, 4) << '\n';
+//     std::cout << "Depth 5: " << perft(chessBoard, 5) << '\n';
+//     std::cout << "Depth 6: " << perft(chessBoard, 6) << '\n';
+
+//     return 0;
+// }
