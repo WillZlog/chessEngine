@@ -10,6 +10,20 @@ using namespace std;
 
 // this is a comment to update git :) (count : 3)
 
+struct undoInfo
+{
+    int capturedPiece = -1;
+    int capturedSquare = -1;
+    int movingPiece = -1;
+
+    int prevCastlingRights = -1;
+    uint64_t prevEnpassantSquares = 0ULL;
+    int prevEnpassantDest = -1;
+
+    int prevHalfClock = -1;
+    int prevFullMoveNumber = -1;
+};
+
 struct PieceTexture
 {
     Texture2D textures[2][6];
@@ -858,8 +872,14 @@ bool isInCheck(const Board &board, myColor side)
     return isSquareAttacked(board, kingSquare, (side == White) ? Black : White);
 }
 
-bool makeMove(Board &board, uint16_t move)
+bool makeMove(Board &board, uint16_t move, undoInfo &undo)
 {
+    undo.prevCastlingRights = board.castlingRights;
+    undo.prevEnpassantSquares = board.enPassantSquares;
+    undo.prevEnpassantDest = board.enPassantDest;
+    undo.prevHalfClock = board.halfmoveClock;
+    undo.prevFullMoveNumber = board.fullMoveNumber;
+
     Board boardCopy = board;
 
     int src = move & 0x3F;
@@ -878,6 +898,7 @@ bool makeMove(Board &board, uint16_t move)
         if (board.pieces[movingSide][i] & srcMask)
         {
             movingPiece = i;
+            undo.movingPiece = i;
             break;
         }
     }
@@ -900,6 +921,8 @@ bool makeMove(Board &board, uint16_t move)
         if (board.pieces[enemySide][i] & destMask)
         {
             board.pieces[enemySide][i] &= ~destMask;
+            undo.capturedPiece = i;
+            undo.capturedSquare = dest;
             break;
         }
     }
@@ -910,6 +933,9 @@ bool makeMove(Board &board, uint16_t move)
         int capturedPawn = (movingSide == White) ? dest - 8 : dest + 8;
 
         board.pieces[enemySide][Pawn] &= ~(1ULL << capturedPawn);
+
+        undo.capturedPiece = Pawn;
+        undo.capturedSquare = capturedPawn;
     }
     if (flag == KingCastle)
     {
@@ -1582,8 +1608,65 @@ bool loadFEN(Board &board, const std::string &fen)
     return true;
 }
 
+bool undoMove(Board &board, uint16_t undoMove, undoInfo &undo)
+{
+    int src = undoMove & 0x3F;
+    int dest = (undoMove << 6) & 0x3F;
+    int flag = (undoMove << 12) & 0xF;
+
+    int srcMask = 1ULL << src;
+    int destMask = 1ULL << dest;
+
+    myColor side = (board.sideToMove == White) ? Black : White;
+
+    myColor enemySide = (side == White) ? Black : White;
+
+    int movedPiece = undo.movingPiece;
+
+    if (flag >= PromoteKnight && flag <= PromoteQueenCapture)
+    {
+        int promotedPiece = -1;
+        if (flag == PromoteKnight || flag == PromoteKnightCapture)
+        {
+            promotedPiece = Knight;
+        }
+        else if (flag == PromoteBishop || flag == PromoteBishopCapture)
+        {
+            promotedPiece = Bishop;
+        }
+        else if (flag == PromoteRook || flag == PromoteRookCapture)
+        {
+            promotedPiece = Rook;
+        }
+        else if (flag == PromoteQueen || flag == PromoteQueenCapture)
+        {
+            promotedPiece = Queen;
+        }
+        board.pieces[side][promotedPiece] &= ~destMask;
+        board.pieces[side][Pawn] |= srcMask;
+    }
+    else
+    {
+        if (movedPiece != -1)
+        {
+            board.pieces[side][movedPiece] &= ~destMask;
+            board.pieces[side][movedPiece] |= srcMask;
+        }
+    }
+
+    if (flag == KingCastle)
+    {
+        if (side == White)
+        {
+            board.pieces[White][Rook] &= ~(1ULL << 5);
+            board.pieces[Wht]
+        }
+    }
+}
+
 int main()
 {
+    undoInfo undo;
     knightLookup();
     kingLookup();
     Board chessBoard;
