@@ -1747,6 +1747,7 @@ uint64_t perft(Board board, int depth)
     return nodes;
 }
 
+#ifndef UNIT_TEST
 int main()
 {
     initZobrist();
@@ -1889,7 +1890,7 @@ int main()
     CloseWindow();
     return 0;
 }
-
+#endif
 //! USE THIS MAIN ONLY FOR TESTING
 // int main()
     // {

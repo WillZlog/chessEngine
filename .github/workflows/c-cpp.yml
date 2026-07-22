@@ -1,23 +1,31 @@
-name: Build Chess Engine
+name: Build and Test Chess Engine
 
 on:
   push:
+    paths:
+      - "**/*.cpp"
+
   pull_request:
+    paths:
+      - "**/*.cpp"
+
 
 jobs:
-  build:
+  build-and-test:
     runs-on: macos-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Raylib
+      - name: Install raylib
         run: brew install raylib
 
-      - name: Compile
+      - name: Compile chess engine
         run: |
-          clang++ -std=c++20 main.cpp -o main \
+          clang++ -std=c++20 -O2 \
+            main.cpp \
+            -o main \
             -I"$(brew --prefix raylib)/include" \
             -L"$(brew --prefix raylib)/lib" \
             -lraylib \
@@ -25,5 +33,17 @@ jobs:
             -framework Cocoa \
             -framework OpenGL
 
-      - name: Confirm executable was created
-        run: test -f main
+      - name: Compile tests
+        run: |
+          clang++ -std=c++20 -O2 \
+            tests/test_main.cpp \
+            -I"$(brew --prefix raylib)/include" \
+            -L"$(brew --prefix raylib)/lib" \
+            -lraylib \
+            -framework IOKit \
+            -framework Cocoa \
+            -framework OpenGL \
+            -o tests_run
+
+      - name: Run tests
+        run: ./tests_run
