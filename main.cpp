@@ -1747,6 +1747,108 @@ uint64_t perft(Board board, int depth)
     return nodes;
 }
 
+// Simple material evaluation (centipawns)
+static const int PIECE_VALUES[6] = {100, 320, 330, 500, 20000, 900};
+
+int evaluatePosition(const Board &board)
+{
+    int score = 0;
+    for (int piece = 0; piece < 6; ++piece)
+    {
+        uint64_t w = board.pieces[White][piece];
+        uint64_t b = board.pieces[Black][piece];
+
+        score += __builtin_popcountll(w) * PIECE_VALUES[piece];
+        score -= __builtin_popcountll(b) * PIECE_VALUES[piece];
+    }
+
+    // From White's perspective: positive means White advantage
+    return score;
+}
+
+int negamax(Board &board, int depth, int alpha, int beta)
+{
+    if (depth == 0)
+    {
+        // return evaluation from perspective of side to move
+        int eval = evaluatePosition(board);
+        return (board.sideToMove == White) ? eval : -eval;
+    }
+
+    movesList moves = generateMoves(board);
+
+    if (moves.count == 0)
+    {
+        // No legal moves: checkmate or stalemate
+        if (isInCheck(board, board.sideToMove))
+        {
+            // losing position for side to move
+            return -1000000 + (/*ply*/0);
+        }
+        else
+        {
+            return 0; // stalemate
+        }
+    }
+
+    int best = -10000000;
+
+    for (int i = 0; i < moves.count; ++i)
+    {
+        undoInfo undoLocal;
+        Board copy = board;
+        if (!makeMove(copy, moves.moves[i], undoLocal))
+            continue;
+
+        int val = -negamax(copy, depth - 1, -beta, -alpha);
+
+        if (val > best)
+            best = val;
+
+        if (best > alpha)
+            alpha = best;
+
+        if (alpha >= beta)
+            break; // alpha-beta cutoff
+    }
+
+    return best;
+}
+
+bool makeBotMove(Board &board, undoInfo &undo)
+{
+    // Choose depth; 3 is a reasonable default for responsiveness. Adjust if you want stronger play.
+    const int SEARCH_DEPTH = 3;
+
+    movesList moves = generateMoves(board);
+    if (moves.count == 0)
+        return false;
+
+    int bestScore = -10000000;
+    uint16_t bestMove = moves.moves[0];
+
+    for (int i = 0; i < moves.count; ++i)
+    {
+        undoInfo undoLocal;
+        Board copy = board;
+        uint16_t candidate = moves.moves[i];
+
+        if (!makeMove(copy, candidate, undoLocal))
+            continue;
+
+        int score = -negamax(copy, SEARCH_DEPTH - 1, -10000000, 10000000);
+
+        if (score > bestScore)
+        {
+            bestScore = score;
+            bestMove = candidate;
+        }
+    }
+
+    // Apply the chosen move to the real board
+    return makeMove(board, bestMove, undo);
+}
+
 #ifndef UNIT_TEST
 int main()
 {
@@ -1855,6 +1957,15 @@ int main()
                                 if (makeMove(chessBoard, foundMove, undo))
                                 {
                                     checkGameOver();
+
+                                    // If game not over and it's now Black's turn, have the bot make a move
+                                    if (!gameOver && chessBoard.sideToMove == Black)
+                                    {
+                                        if (makeBotMove(chessBoard, undo))
+                                        {
+                                            checkGameOver();
+                                        }
+                                    }
                                 }
                             }
                         }
