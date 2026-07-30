@@ -25,3 +25,11 @@ i need the homebrew flags or else it wont detect raylib
 -framework IOKit \
 -framework Cocoa \
 -framework OpenGL`
+
+**emcc**: `emcc main.cpp -o index.html \                                                  
+    -I/opt/homebrew/include \
+    -L./raylib-5.0_webassembly/lib -lraylib \
+    -s USE_GLFW=3 \
+    -s ASYNCIFY \
+    -DPLATFORM_WEB \
+    --preload-file assets`
