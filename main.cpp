@@ -6,6 +6,7 @@
 #include <cctype>
 #include <vector>
 #include <random>
+#include <algorithm>
 
 using namespace std;
 
@@ -1750,19 +1751,203 @@ uint64_t perft(Board board, int depth)
 // Simple material evaluation (centipawns)
 static const int PIECE_VALUES[6] = {100, 320, 330, 500, 20000, 900};
 
+static const int PAWN_TABLE[64] = {
+    0, 0, 0, 0, 0, 0, 0, 0,
+    5, 10, 10, -20, -20, 10, 10, 5,
+    5, -5, -10, 0, 0, -10, -5, 5,
+    0, 0, 0, 20, 20, 0, 0, 0,
+    5, 5, 10, 25, 25, 10, 5, 5,
+    10, 10, 20, 30, 30, 20, 10, 10,
+    50, 50, 50, 50, 50, 50, 50, 50,
+    0, 0, 0, 0, 0, 0, 0, 0};
+
+static const int KNIGHT_TABLE[64] = {
+    -50, -40, -30, -30, -30, -30, -40, -50,
+    -40, -20, 0, 5, 5, 0, -20, -40,
+    -30, 5, 10, 15, 15, 10, 5, -30,
+    -30, 0, 15, 20, 20, 15, 0, -30,
+    -30, 5, 15, 20, 20, 15, 5, -30,
+    -30, 0, 10, 15, 15, 10, 0, -30,
+    -40, -20, 0, 0, 0, 0, -20, -40,
+    -50, -40, -30, -30, -30, -30, -40, -50};
+
+static const int BISHOP_TABLE[64] = {
+    -20, -10, -10, -10, -10, -10, -10, -20,
+    -10, 5, 0, 0, 0, 0, 5, -10,
+    -10, 10, 10, 10, 10, 10, 10, -10,
+    -10, 0, 10, 10, 10, 10, 0, -10,
+    -10, 5, 5, 10, 10, 5, 5, -10,
+    -10, 0, 5, 10, 10, 5, 0, -10,
+    -10, 0, 0, 0, 0, 0, 0, -10,
+    -20, -10, -10, -10, -10, -10, -10, -20};
+
+static const int ROOK_TABLE[64] = {
+    0, 0, 0, 5, 5, 0, 0, 0,
+    -5, 0, 0, 0, 0, 0, 0, -5,
+    -5, 0, 0, 0, 0, 0, 0, -5,
+    -5, 0, 0, 0, 0, 0, 0, -5,
+    -5, 0, 0, 0, 0, 0, 0, -5,
+    -5, 0, 0, 0, 0, 0, 0, -5,
+    5, 10, 10, 10, 10, 10, 10, 5,
+    0, 0, 0, 0, 0, 0, 0, 0};
+
+static const int QUEEN_TABLE[64] = {
+    -20, -10, -10, -5, -5, -10, -10, -20,
+    -10, 0, 5, 0, 0, 0, 0, -10,
+    -10, 5, 5, 5, 5, 5, 0, -10,
+    0, 0, 5, 5, 5, 5, 0, -5,
+    -5, 0, 5, 5, 5, 5, 0, -5,
+    -10, 0, 5, 5, 5, 5, 0, -10,
+    -10, 0, 0, 0, 0, 0, 0, -10,
+    -20, -10, -10, -5, -5, -10, -10, -20};
+
+static const int KING_TABLE[64] = {
+    -30, -40, -40, -50, -50, -40, -40, -30,
+    -30, -40, -40, -50, -50, -40, -40, -30,
+    -30, -40, -40, -50, -50, -40, -40, -30,
+    -30, -40, -40, -50, -50, -40, -40, -30,
+    -20, -30, -30, -40, -40, -30, -30, -20,
+    -10, -20, -20, -20, -20, -20, -20, -10,
+    20, 20, 0, 0, 0, 0, 20, 20,
+    20, 30, 10, 0, 0, 10, 30, 20};
+
+static int mirrorSquare(int square)
+{
+    return square ^ 56;
+}
+
+static int pieceSquareValue(int piece, int square)
+{
+    switch (piece)
+    {
+    case Pawn:
+        return PAWN_TABLE[square];
+    case Knight:
+        return KNIGHT_TABLE[square];
+    case Bishop:
+        return BISHOP_TABLE[square];
+    case Rook:
+        return ROOK_TABLE[square];
+    case Queen:
+        return QUEEN_TABLE[square];
+    case King:
+        return KING_TABLE[square];
+    default:
+        return 0;
+    }
+}
+
 int evaluatePosition(const Board &board)
 {
     int score = 0;
+
     for (int piece = 0; piece < 6; ++piece)
     {
-        uint64_t w = board.pieces[White][piece];
-        uint64_t b = board.pieces[Black][piece];
+        uint64_t white = board.pieces[White][piece];
 
-        score += __builtin_popcountll(w) * PIECE_VALUES[piece];
-        score -= __builtin_popcountll(b) * PIECE_VALUES[piece];
+        while (white)
+        {
+            const int square = __builtin_ctzll(white);
+            white &= white - 1;
+
+            score += PIECE_VALUES[piece];
+            score += pieceSquareValue(piece, square);
+        }
+
+        uint64_t black = board.pieces[Black][piece];
+
+        while (black)
+        {
+            const int square = __builtin_ctzll(black);
+            black &= black - 1;
+
+            score -= PIECE_VALUES[piece];
+            score -= pieceSquareValue(
+                piece,
+                mirrorSquare(square));
+        }
     }
 
-    // From White's perspective: positive means White advantage
+    return score;
+}
+
+static int moveOrderingScore(const Board &board, uint16_t move)
+{
+    const int src = move & 0x3F;
+    const int dest = (move >> 6) & 0x3F;
+    const int flag = (move >> 12) & 0xF;
+
+    int movingPiece = -1;
+    int capturedPiece = -1;
+
+    const myColor side = board.sideToMove;
+    const myColor enemy = side == White ? Black : White;
+
+    const uint64_t srcMask = 1ULL << src;
+    const uint64_t destMask = 1ULL << dest;
+
+    for (int piece = 0; piece < 6; ++piece)
+    {
+        if (board.pieces[side][piece] & srcMask)
+        {
+            movingPiece = piece;
+            break;
+        }
+    }
+
+    for (int piece = 0; piece < 6; ++piece)
+    {
+        if (board.pieces[enemy][piece] & destMask)
+        {
+            capturedPiece = piece;
+            break;
+        }
+    }
+
+    if (flag == EnPassantMove)
+        capturedPiece = Pawn;
+
+    int score = 0;
+
+    // Search valuable captures first.
+    if (capturedPiece != -1 && movingPiece != -1)
+    {
+        score += 10000;
+        score += 10 * PIECE_VALUES[capturedPiece];
+        score -= PIECE_VALUES[movingPiece];
+    }
+
+    // Search promotions very early.
+    switch (flag)
+    {
+    case PromoteQueen:
+    case PromoteQueenCapture:
+        score += 9000;
+        break;
+
+    case PromoteRook:
+    case PromoteRookCapture:
+        score += 5000;
+        break;
+
+    case PromoteBishop:
+    case PromoteBishopCapture:
+        score += 3300;
+        break;
+
+    case PromoteKnight:
+    case PromoteKnightCapture:
+        score += 3200;
+        break;
+
+    default:
+        break;
+    }
+
+    // Prefer castling over random quiet moves.
+    if (flag == KingCastle || flag == QueenCastle)
+        score += 500;
+
     return score;
 }
 
@@ -1777,13 +1962,22 @@ int negamax(Board &board, int depth, int alpha, int beta)
 
     movesList moves = generateMoves(board);
 
+    std::sort(
+        moves.moves,
+        moves.moves + moves.count,
+        [&board](uint16_t a, uint16_t b)
+        {
+            return moveOrderingScore(board, a) >
+                   moveOrderingScore(board, b);
+        });
+
     if (moves.count == 0)
     {
         // No legal moves: checkmate or stalemate
         if (isInCheck(board, board.sideToMove))
         {
             // losing position for side to move
-            return -1000000 + (/*ply*/0);
+            return -1000000 + (/*ply*/ 0);
         }
         else
         {
@@ -1826,6 +2020,7 @@ bool makeBotMove(Board &board, undoInfo &undo)
 
     int bestScore = -10000000;
     uint16_t bestMove = moves.moves[0];
+    bool foundLegal = false;
 
     for (int i = 0; i < moves.count; ++i)
     {
@@ -1836,6 +2031,7 @@ bool makeBotMove(Board &board, undoInfo &undo)
         if (!makeMove(copy, candidate, undoLocal))
             continue;
 
+        foundLegal = true;
         int score = -negamax(copy, SEARCH_DEPTH - 1, -10000000, 10000000);
 
         if (score > bestScore)
@@ -1845,22 +2041,467 @@ bool makeBotMove(Board &board, undoInfo &undo)
         }
     }
 
+    if (!foundLegal)
+        return false;
+
     // Apply the chosen move to the real board
     return makeMove(board, bestMove, undo);
 }
 
-#ifndef UNIT_TEST
-int main()
+// Convert a square index (0..63) to algebraic coordinate (e.g., 0 -> a1, 63 -> h8)
+static std::string squareToCoord(int sq)
 {
+    char file = 'a' + (sq % 8);
+    char rank = '1' + (sq / 8);
+    std::string s;
+    s.push_back(file);
+    s.push_back(rank);
+    return s;
+}
+
+// Convert internal move encoding to UCI move string (e.g., e2e4, e7e8q)
+static std::string moveToUCI(uint16_t move)
+{
+    int src = move & 0x3F;
+    int dest = (move >> 6) & 0x3F;
+    int flag = (move >> 12) & 0xF;
+
+    std::string uci = squareToCoord(src) + squareToCoord(dest);
+
+    // Promotion flags map to promoted piece
+    int promotionPiece = -1;
+    switch (flag)
+    {
+    case PromoteKnight:
+    case PromoteKnightCapture:
+        promotionPiece = Knight;
+        break;
+    case PromoteBishop:
+    case PromoteBishopCapture:
+        promotionPiece = Bishop;
+        break;
+    case PromoteRook:
+    case PromoteRookCapture:
+        promotionPiece = Rook;
+        break;
+    case PromoteQueen:
+    case PromoteQueenCapture:
+        promotionPiece = Queen;
+        break;
+    }
+
+    if (promotionPiece != -1)
+    {
+        char pchar = 'q';
+        if (promotionPiece == Knight)
+            pchar = 'n';
+        else if (promotionPiece == Bishop)
+            pchar = 'b';
+        else if (promotionPiece == Rook)
+            pchar = 'r';
+        else if (promotionPiece == Queen)
+            pchar = 'q';
+        uci.push_back(pchar);
+    }
+
+    return uci;
+}
+
+// Simple best-move search that returns the best move (or 0 on failure) without applying it to the provided board
+static uint16_t searchBestMove(Board board, int depth)
+{
+    if (depth <= 0)
+        depth = 1;
+
+    movesList moves = generateMoves(board);
+
+    std::sort(
+        moves.moves,
+        moves.moves + moves.count,
+        [&board](uint16_t a, uint16_t b)
+        {
+            return moveOrderingScore(board, a) >
+                   moveOrderingScore(board, b);
+        });
+
+    if (moves.count == 0)
+        return 0;
+
+    int bestScore = -10000000;
+    uint16_t bestMove = 0;
+    bool foundLegal = false;
+
+    for (int i = 0; i < moves.count; ++i)
+    {
+        undoInfo undoLocal;
+        Board copy = board;
+        uint16_t candidate = moves.moves[i];
+
+        if (!makeMove(copy, candidate, undoLocal))
+            continue;
+
+        foundLegal = true;
+        int score = -negamax(copy, depth - 1, -10000000, 10000000);
+
+        if (score > bestScore || bestMove == 0)
+        {
+            bestScore = score;
+            bestMove = candidate;
+        }
+    }
+
+    if (!foundLegal)
+        return 0;
+
+    return bestMove;
+}
+
+static bool applyUciMove(Board &board, const std::string &uci)
+{
+    if (uci.length() != 4 && uci.length() != 5)
+    {
+        std::cerr << "[UCI ERROR] Invalid move text: " << uci << '\n';
+        return false;
+    }
+
+    const int src = cordToMove(uci.substr(0, 2));
+    const int dest = cordToMove(uci.substr(2, 2));
+
+    if (src < 0 || dest < 0)
+    {
+        std::cerr << "[UCI ERROR] Invalid coordinates: " << uci << '\n';
+        return false;
+    }
+
+    movesList generated = generateMoves(board);
+
+    uint16_t selectedMove = 0;
+    bool found = false;
+
+    for (int i = 0; i < generated.count; ++i)
+    {
+        const uint16_t move = generated.moves[i];
+
+        const int moveSrc = move & 0x3F;
+        const int moveDest = (move >> 6) & 0x3F;
+        const int flag = (move >> 12) & 0xF;
+
+        if (moveSrc != src || moveDest != dest)
+            continue;
+
+        // A normal non-promotion move.
+        if (uci.length() == 4)
+        {
+            const bool isPromotion =
+                flag == PromoteKnight ||
+                flag == PromoteBishop ||
+                flag == PromoteRook ||
+                flag == PromoteQueen ||
+                flag == PromoteKnightCapture ||
+                flag == PromoteBishopCapture ||
+                flag == PromoteRookCapture ||
+                flag == PromoteQueenCapture;
+
+            if (isPromotion)
+                continue;
+
+            selectedMove = move;
+            found = true;
+            break;
+        }
+
+        // Promotion move.
+        char generatedPromotion = '\0';
+
+        switch (flag)
+        {
+        case PromoteKnight:
+        case PromoteKnightCapture:
+            generatedPromotion = 'n';
+            break;
+
+        case PromoteBishop:
+        case PromoteBishopCapture:
+            generatedPromotion = 'b';
+            break;
+
+        case PromoteRook:
+        case PromoteRookCapture:
+            generatedPromotion = 'r';
+            break;
+
+        case PromoteQueen:
+        case PromoteQueenCapture:
+            generatedPromotion = 'q';
+            break;
+
+        default:
+            break;
+        }
+
+        if (generatedPromotion == uci[4])
+        {
+            selectedMove = move;
+            found = true;
+            break;
+        }
+    }
+
+    if (!found)
+    {
+        std::cerr
+            << "[UCI ERROR] Move not generated: " << uci
+            << " side=" << (board.sideToMove == White ? "white" : "black")
+            << " legal moves:";
+
+        for (int i = 0; i < generated.count; ++i)
+            std::cerr << ' ' << moveToUCI(generated.moves[i]);
+
+        std::cerr << '\n';
+        return false;
+    }
+
+    undoInfo undo{};
+
+    if (!makeMove(board, selectedMove, undo))
+    {
+        std::cerr
+            << "[UCI ERROR] makeMove rejected: " << uci
+            << " side=" << (board.sideToMove == White ? "white" : "black")
+            << '\n';
+
+        return false;
+    }
+
+    return true;
+}
+
+// Minimal UCI loop to allow engine integration with UCI-compatible GUIs
+static void uciLoop()
+{
+
+    bool currentPositionValid = true;
+
+    Board board;
+
+    board.positionHistory.push_back(
+
+        computePositionKey(board)
+
+    );
+
+    std::string line;
+
+    while (std::getline(std::cin, line))
+    {
+        if (line.empty())
+            continue;
+
+        std::istringstream iss(line);
+        std::string token;
+        iss >> token;
+
+        if (token == "uci")
+        {
+            std::cout << "id name chessEngine" << std::endl;
+            std::cout << "id author Unknown" << std::endl;
+            std::cout << "uciok" << std::endl;
+        }
+        else if (token == "isready")
+        {
+            std::cout << "readyok" << std::endl;
+        }
+        else if (token == "position")
+        {
+            std::string positionType;
+            iss >> positionType;
+
+            bool positionValid = true;
+
+            if (positionType == "startpos")
+            {
+                board = Board();
+
+                board.positionHistory.clear();
+
+                board.positionHistory.push_back(
+
+                    computePositionKey(board)
+
+                );
+
+                std::string nextToken;
+
+                if (iss >> nextToken)
+                {
+                    if (nextToken != "moves")
+                    {
+                        std::cerr
+                            << "[UCI ERROR] Unexpected token after startpos: "
+                            << nextToken << '\n';
+
+                        positionValid = false;
+                    }
+                }
+            }
+            else if (positionType == "fen")
+            {
+                std::string fenFields[6];
+
+                for (std::string &field : fenFields)
+                {
+                    if (!(iss >> field))
+                    {
+                        std::cerr << "[UCI ERROR] Incomplete FEN command\n";
+                        positionValid = false;
+                        break;
+                    }
+                }
+
+                if (positionValid)
+                {
+                    const std::string fen =
+                        fenFields[0] + " " +
+                        fenFields[1] + " " +
+                        fenFields[2] + " " +
+                        fenFields[3] + " " +
+                        fenFields[4] + " " +
+                        fenFields[5];
+
+                    if (!loadFEN(board, fen))
+                    {
+                        std::cerr << "[UCI ERROR] Invalid FEN: " << fen << '\n';
+                        positionValid = false;
+                    }
+                }
+
+                if (positionValid)
+                {
+                    std::string nextToken;
+
+                    if (iss >> nextToken && nextToken != "moves")
+                    {
+                        std::cerr
+                            << "[UCI ERROR] Expected 'moves', received: "
+                            << nextToken << '\n';
+
+                        positionValid = false;
+                    }
+                }
+            }
+            else
+            {
+                std::cerr
+                    << "[UCI ERROR] Unknown position type: "
+                    << positionType << '\n';
+
+                positionValid = false;
+            }
+
+            if (positionValid)
+            {
+                std::string uciMove;
+                int appliedMoves = 0;
+
+                while (iss >> uciMove)
+                {
+                    if (!applyUciMove(board, uciMove))
+                    {
+                        std::cerr
+                            << "[UCI ERROR] Position replay stopped after "
+                            << appliedMoves << " moves\n";
+
+                        positionValid = false;
+                        break;
+                    }
+
+                    ++appliedMoves;
+                }
+
+                if (positionValid)
+                {
+                    std::cerr
+                        << "[UCI] Replayed " << appliedMoves
+                        << " moves; side to move: "
+                        << (board.sideToMove == White ? "white" : "black")
+                        << '\n';
+                }
+            }
+            currentPositionValid = positionValid;
+        }
+        else if (token == "go")
+        {
+            if (!currentPositionValid)
+            {
+                std::cerr << "[UCI ERROR] Refusing to search invalid position\n";
+                std::cout << "bestmove 0000" << std::endl;
+                continue;
+            }
+
+            int depth = 3;
+
+            std::string param;
+            while (iss >> param)
+            {
+                if (param == "depth")
+                {
+                    if (iss >> param)
+                        depth = std::stoi(param);
+                }
+            }
+
+            const uint16_t best = searchBestMove(board, depth);
+
+            if (best == 0)
+                std::cout << "bestmove 0000" << std::endl;
+            else
+                std::cout << "bestmove " << moveToUCI(best) << std::endl;
+        }
+    }
+}
+
+#ifndef UNIT_TEST
+
+int main(int argc, char **argv)
+
+{
+
     initZobrist();
-    undoInfo undo;
+
     knightLookup();
+
     kingLookup();
+
+    if (argc > 1 && std::string(argv[1]) == "--uci")
+
+    {
+
+        uciLoop();
+
+        return 0;
+    }
+
+    undoInfo undo;
+
     Board chessBoard;
+
     movesList moves;
 
-    chessBoard.castlingRights = WhiteKingSide | WhiteQueenSide | BlackKingSide | BlackQueenSide;
-    chessBoard.positionHistory.push_back(computePositionKey(chessBoard));
+    chessBoard.castlingRights =
+
+        WhiteKingSide |
+
+        WhiteQueenSide |
+
+        BlackKingSide |
+
+        BlackQueenSide;
+
+    chessBoard.positionHistory.push_back(
+
+        computePositionKey(chessBoard)
+
+    );
 
     const int squareSize = 100;
     const int boardSize = squareSize * 8;
@@ -2002,29 +2643,29 @@ int main()
     return 0;
 }
 #endif
-//! USE THIS MAIN ONLY FOR TESTING
+// ! USE THIS MAIN ONLY FOR TESTING
 // int main()
-    // {
-    //     Board chessBoard;
-    //     knightLookup();
-    //     kingLookup();
+// {
+//     Board chessBoard;
+//     knightLookup();
+//     kingLookup();
 
-    //     std::string fen = "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1";
+//     std::string fen = "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1";
 
-    //     if (!(loadFEN(chessBoard, fen)))
-    //     {
-    //         std::cerr << "Failed to load FEN";
-    //         return 1;
-    //     }
+//     if (!(loadFEN(chessBoard, fen)))
+//     {
+//         std::cerr << "Failed to load FEN";
+//         return 1;
+//     }
 
-    //     printBoard(chessBoard);
+//     printBoard(chessBoard);
 
-    //     std::cout << "Depth 1: " << perft(chessBoard, 1) << '\n';
-    //     std::cout << "Depth 2: " << perft(chessBoard, 2) << '\n';
-    //     std::cout << "Depth 3: " << perft(chessBoard, 3) << '\n';
-    //     std::cout << "Depth 4: " << perft(chessBoard, 4) << '\n';
-    //     std::cout << "Depth 5: " << perft(chessBoard, 5) << '\n';
-    //     std::cout << "Depth 6: " << perft(chessBoard, 6) << '\n';
+//     std::cout << "Depth 1: " << perft(chessBoard, 1) << '\n';
+//     std::cout << "Depth 2: " << perft(chessBoard, 2) << '\n';
+//     std::cout << "Depth 3: " << perft(chessBoard, 3) << '\n';
+//     std::cout << "Depth 4: " << perft(chessBoard, 4) << '\n';
+//     std::cout << "Depth 5: " << perft(chessBoard, 5) << '\n';
+//     std::cout << "Depth 6: " << perft(chessBoard, 6) << '\n';
 
-    //     return 0;
-    // }
+//     return 0;
+// }
